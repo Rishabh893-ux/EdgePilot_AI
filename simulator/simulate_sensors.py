@@ -132,5 +132,19 @@ def run_simulator(client):
             f"RPM={r['rpm']} | {flag}",
             flush=True
         )
+        
+        # Periodically generate mock safety violations for the demo
+        if state["step"] > 0 and state["step"] % 25 == 0:
+            try:
+                from backend.database import SessionLocal, PPEViolation
+                db = SessionLocal()
+                v = random.choice(["Worker spotted without helmet near Conveyor", "No Hi-Vis vest detected in Zone B", "Technician not wearing safety goggles", "Unauthorized access to high-voltage area"])
+                db.add(PPEViolation(machine_id=MACHINE_ID, violation=v, shift=get_shift(), created_at=r["timestamp"]))
+                db.commit()
+                db.close()
+                print(f" [SAFETY] Logged mock violation: {v}")
+            except Exception:
+                pass
+                
         state["step"] += 1
         time.sleep(INTERVAL)

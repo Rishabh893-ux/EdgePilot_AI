@@ -46,7 +46,7 @@ export default function AnalyticsPage() {
     try {
       const [tr, rd, dash] = await Promise.all([
         api.trend(50),
-        fetch("http://localhost:8000/api/machine/machine_001/readings?limit=100").then(r => r.json()),
+        api.readings(100),
         api.dashboard()
       ])
       setTrend(tr.readings || [])

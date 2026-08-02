@@ -98,6 +98,10 @@ export const api = {
   trend: (n = 25) =>
     cachedFetch(`trend:${n}`, `${BASE}/api/machine/machine_001/trend?n=${n}`, DEFAULT_TTL),
 
+  readings: (limit = 100) =>
+    cachedFetch(`readings:${limit}`, `${BASE}/api/machine/machine_001/readings?limit=${limit}`, DEFAULT_TTL),
+
+
   // ── Alerts — cached 4s ────────────────────────────────────────────
   alerts: (limit = 15) =>
     cachedFetch(`alerts:${limit}`, `${BASE}/api/machine/machine_001/alerts?limit=${limit}`, 4_000),
