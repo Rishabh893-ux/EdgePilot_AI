@@ -63,7 +63,7 @@ export function setSession(user: User, token: string) {
   if (typeof window !== "undefined") {
     localStorage.setItem("edgepilot_user", JSON.stringify(user))
     localStorage.setItem("edgepilot_token", token)
-    document.cookie = `edgepilot_auth=${btoa(JSON.stringify(user))}; path=/; max-age=86400`
+    document.cookie = `edgepilot_auth=${encodeURIComponent(token)}; path=/; max-age=86400; SameSite=Lax`
   }
 }
 
@@ -71,7 +71,7 @@ export function clearSession() {
   if (typeof window !== "undefined") {
     localStorage.removeItem("edgepilot_user")
     localStorage.removeItem("edgepilot_token")
-    document.cookie = "edgepilot_auth=; path=/; max-age=0"
+    document.cookie = "edgepilot_auth=; path=/; max-age=0; SameSite=Lax"
   }
 }
 

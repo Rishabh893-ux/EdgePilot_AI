@@ -11,6 +11,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 from dotenv import load_dotenv
+import threading
+import requests
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -172,7 +174,7 @@ def _build_alert(
         )
         alert_type = "trend"
 
-    return {
+    alert_dict = {
         "machine_id":           machine_id,
         "timestamp":            datetime.now(timezone.utc).isoformat(),
         "alert_type":           alert_type,
@@ -185,11 +187,25 @@ def _build_alert(
         "predicted_breach_time":breach_time.isoformat() if breach_time else None,
     }
 
+    if severity == "critical":
+        def _fire_webhook():
+            try:
+                # Mock webhook for automated ticketing
+                requests.post("http://localhost:8000/api/mock/webhook", json=alert_dict, timeout=1)
+            except Exception:
+                pass
+            print(f"\n[WEBHOOK] Automated Maintenance Ticket created: {msg}\n")
+        
+        threading.Thread(target=_fire_webhook).start()
+
+    return alert_dict
+
 
 def generate_trend_alerts(
     machine_id: str,
     readings: List[dict],
     existing_alerts: List[dict] = [],
+    db = None
 ) -> List[dict]:
     """
     Analyse recent readings and generate new predictive alerts.
@@ -208,9 +224,28 @@ def generate_trend_alerts(
             ts = datetime.now(timezone.utc)
         timestamps.append(ts)
 
+    # Fetch custom thresholds from DB
+    custom_thresholds = {}
+    if db is not None:
+        from backend.database import get_threshold_configs
+        configs = get_threshold_configs(db, machine_id)
+        for c in configs:
+            custom_thresholds[c.parameter] = {
+                "warning": c.warning,
+                "critical": c.critical,
+                "warning_low": c.warning_low,
+                "warning_high": c.warning_high,
+            }
+
     new_alerts = []
 
-    for param, cfg in PARAMETER_CONFIG.items():
+    for param, default_cfg in PARAMETER_CONFIG.items():
+        cfg = dict(default_cfg)
+        if param in custom_thresholds:
+            for k, v in custom_thresholds[param].items():
+                if v is not None:
+                    cfg[k] = v
+                    
         direction = cfg["direction"]
         values    = [r.get(param, 0) for r in readings]
 

@@ -22,7 +22,7 @@ export default function LoginPage() {
         const user = normalizeUser({ username: response.user?.username || username, role: response.user?.role || "viewer" })
         if (user) {
           setSession(user, response.token)
-          window.location.href = "/"
+          window.location.assign("/")
         } else {
           setError("Unable to create session")
           setLoading(false)
@@ -92,7 +92,7 @@ export default function LoginPage() {
         {/* Footer */}
         <div>
           <p className="text-xs" style={{ color: "#9FB8C9" }}>
-            Team Tech Titans · Tata Technologies InnoVent
+            by Rishabh Kasaudhan
           </p>
         </div>
       </div>

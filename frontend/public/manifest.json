@@ -1,0 +1,26 @@
+{
+  "name": "EdgePilot AI",
+  "short_name": "EdgePilot",
+  "description": "Autonomous Heavy Machine Intelligence Platform — Real-time industrial AI monitoring.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1729",
+  "theme_color": "#1C7293",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["industrial", "monitoring", "productivity"]
+}

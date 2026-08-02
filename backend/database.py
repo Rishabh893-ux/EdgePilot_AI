@@ -17,8 +17,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./edgepilot.db")
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False},
-                       poolclass=StaticPool, echo=False)
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, echo=False)
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
@@ -41,6 +40,10 @@ class SensorReading(Base):
     reading_id    = Column(Integer, default=0)
     is_anomaly    = Column(Boolean, default=False, index=True)
     anomaly_score = Column(Float, nullable=True)
+    local_anomaly = Column(Boolean, default=False)
+    power_kw      = Column(Float, nullable=True)
+    carbon_emission = Column(Float, nullable=True)
+    acoustic_freq = Column(Float, nullable=True)
 
 class Alert(Base):
     __tablename__ = "alerts"
@@ -108,9 +111,20 @@ class PPEViolation(Base):
     shift      = Column(String(20), nullable=True)
     created_at = Column(String(50))
 
+class ThresholdConfig(Base):
+    __tablename__ = "threshold_configs"
+    id           = Column(Integer, primary_key=True, index=True)
+    machine_id   = Column(String(50), index=True)
+    parameter    = Column(String(50))
+    warning      = Column(Float, nullable=True)
+    critical     = Column(Float, nullable=True)
+    warning_low  = Column(Float, nullable=True)
+    warning_high = Column(Float, nullable=True)
+    updated_at   = Column(DateTime(timezone=True))
+
 def init_db():
     Base.metadata.create_all(bind=engine)
-    print("[OK] Database initialised → edgepilot.db")
+    print("[OK] Database initialised -> edgepilot.db")
 
 @contextmanager
 def get_db():
@@ -134,6 +148,10 @@ def save_reading(db: Session, data: dict):
         vibration=data["vibration"], rpm=data["rpm"],
         motor_current=data["motor_current"], health_score=data["health_score"],
         reading_id=data.get("reading_id",0), is_anomaly=False,
+        local_anomaly=data.get("local_anomaly", False),
+        power_kw=data.get("power_kw", data.get("power_draw_kw")),
+        carbon_emission=data.get("carbon_emission"),
+        acoustic_freq=data.get("acoustic_freq"),
     )
     db.add(r); db.flush(); return r
 
@@ -283,3 +301,28 @@ def update_shift_baseline(db: Session, machine_id: str, shift: str, parameter: s
     else:
         db.add(ShiftBaseline(machine_id=machine_id, shift=shift, parameter=parameter,
                              mean=value, std=value*0.05, updated_at=datetime.now(timezone.utc)))
+
+def get_threshold_configs(db: Session, machine_id: str):
+    return db.query(ThresholdConfig).filter(ThresholdConfig.machine_id == machine_id).all()
+
+def save_threshold_config(db: Session, data: dict):
+    t = db.query(ThresholdConfig).filter(
+        ThresholdConfig.machine_id == data["machine_id"],
+        ThresholdConfig.parameter == data["parameter"]
+    ).first()
+    if t:
+        if "warning" in data: t.warning = data["warning"]
+        if "critical" in data: t.critical = data["critical"]
+        if "warning_low" in data: t.warning_low = data["warning_low"]
+        if "warning_high" in data: t.warning_high = data["warning_high"]
+        t.updated_at = datetime.now(timezone.utc)
+    else:
+        t = ThresholdConfig(
+            machine_id=data["machine_id"], parameter=data["parameter"],
+            warning=data.get("warning"), critical=data.get("critical"),
+            warning_low=data.get("warning_low"), warning_high=data.get("warning_high"),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db.add(t)
+    db.flush()
+    return t

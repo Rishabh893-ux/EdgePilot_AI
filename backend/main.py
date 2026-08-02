@@ -9,8 +9,11 @@ from typing import List, Optional
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import json
+from paho.mqtt.publish import single as mqtt_publish
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -20,7 +23,8 @@ from backend.database import (
     get_health_stats, get_recent_alerts, get_unacknowledged_alerts,
     acknowledge_alert, save_maintenance_log, get_maintenance_history,
     get_recurring_patterns, get_latest_failure_story, save_failure_story,
-    get_copilot_context, get_machine_ids, get_safety_summary
+    get_copilot_context, get_machine_ids, get_safety_summary,
+    get_threshold_configs, save_threshold_config
 )
 from backend.auth import authenticate_user, create_session_token, get_user_from_token, revoke_session_token, create_user, ensure_default_users
 from backend.anomaly  import get_detector, train_detector
@@ -30,16 +34,16 @@ from backend.alerts   import generate_trend_alerts, generate_failure_story
 from backend.mqtt_subscriber import start_subscriber, stop_subscriber, get_subscriber_status
 from backend.models   import (
     MaintenanceCreate, CopilotRequest, CopilotResponse,
-    DashboardResponse, SystemStatus
+    DashboardResponse, SystemStatus, ThresholdConfigUpdate
 )
-from copilot.copilot  import ask_copilot
+from copilot.copilot  import ask_copilot, generate_work_order
 
 MACHINE_ID = "machine_001"
 _start_time = time.time()
 
 app = FastAPI(
     title       = "EdgePilot AI",
-    description = "Autonomous Heavy Machine Intelligence Platform — Team Tech Titans",
+    description = "Autonomous Heavy Machine Intelligence Platform — by Rishabh Kasaudhan",
     version     = "1.0.0"
 )
 
@@ -56,8 +60,8 @@ def startup():
     start_subscriber()
     print("=" * 50)
     print("  [OK] EdgePilot AI Backend ready")
-    print("  API  → http://localhost:8000")
-    print("  Docs → http://localhost:8000/docs")
+    print("  API  -> http://localhost:8000")
+    print("  Docs -> http://localhost:8000/docs")
     print("=" * 50)
 
 
@@ -121,6 +125,12 @@ def system_status():
     )
 
 
+@app.post("/api/mock/webhook", tags=["system"])
+def mock_webhook(alert: dict):
+    print(f"\n[WEBHOOK SERVER] Received ticket for: {alert.get('message')}\n")
+    return {"status": "ok", "ticket_id": f"TKT-{int(time.time())}"}
+
+
 # ── Dashboard (single call for Mission Control) ────────────────────
 @app.get("/api/dashboard", tags=["dashboard"])
 def dashboard():
@@ -139,7 +149,9 @@ def dashboard():
     rdicts = [{"timestamp": r.timestamp.isoformat(), "shift": r.shift,
                "health_score": r.health_score, "temperature": r.temperature,
                "vibration": r.vibration, "rpm": r.rpm,
-               "motor_current": r.motor_current} for r in readings]
+               "motor_current": r.motor_current,
+               "power_kw": r.power_kw, "carbon_emission": r.carbon_emission,
+               "acoustic_freq": r.acoustic_freq, "local_anomaly": r.local_anomaly} for r in readings]
     rul = det.get_rul_days(rdicts)
 
     return {
@@ -155,10 +167,14 @@ def dashboard():
         "active_alerts":   len(unack),
         "total_readings":  get_subscriber_status()["readings_processed"],
         "last_updated":    latest.timestamp.isoformat(),
+        "power_kw":        latest.power_kw,
+        "carbon_emission": latest.carbon_emission,
         "health_stats":    stats,
         "recent_readings": [
             {"t": r.timestamp.strftime("%H:%M:%S"), "temp": r.temperature,
-             "vib": r.vibration, "health": r.health_score, "rpm": r.rpm}
+             "vib": r.vibration, "health": r.health_score, "rpm": r.rpm,
+             "power_kw": r.power_kw, "carbon_emission": r.carbon_emission,
+             "acoustic": r.acoustic_freq}
             for r in readings
         ],
         "recent_alerts": [
@@ -195,6 +211,60 @@ def fleet_overview():
     return {"machines": machines}
 
 
+@app.get("/api/machine/{machine_id}/export", tags=["dashboard"])
+def export_historical_data(machine_id: str, days: int = 30):
+    import csv, io
+    from datetime import timedelta
+    with get_db() as db:
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        from backend.database import SensorReading
+        rows = db.query(SensorReading).filter(
+            SensorReading.machine_id == machine_id,
+            SensorReading.timestamp >= since
+        ).order_by(SensorReading.timestamp).all()
+        
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Timestamp", "Shift", "Temperature", "Vibration", "RPM", "MotorCurrent", "HealthScore", "IsAnomaly"])
+    for r in rows:
+        writer.writerow([r.timestamp.isoformat(), r.shift, r.temperature, r.vibration, r.rpm, r.motor_current, r.health_score, r.is_anomaly])
+    
+    response = StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
+    response.headers["Content-Disposition"] = f"attachment; filename=export_{machine_id}.csv"
+    return response
+
+
+# ── Control ────────────────────────────────────────────────────────
+@app.post("/api/machine/{machine_id}/control", tags=["control"])
+def control_machine(machine_id: str, command: dict):
+    from backend.mqtt_subscriber import MQTT_BROKER, MQTT_PORT
+    topic = f"edgepilot/control/{machine_id}"
+    try:
+        mqtt_publish(topic, payload=json.dumps(command), hostname=MQTT_BROKER, port=MQTT_PORT)
+        return {"status": "sent", "command": command}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to send control command: {e}")
+
+
+# ── Threshold Settings ─────────────────────────────────────────────
+@app.get("/api/machine/{machine_id}/thresholds", tags=["settings"])
+def get_thresholds(machine_id: str):
+    with get_db() as db:
+        configs = get_threshold_configs(db, machine_id)
+    return {"machine_id": machine_id, "thresholds": [
+        {"parameter": c.parameter, "warning": c.warning, "critical": c.critical,
+         "warning_low": c.warning_low, "warning_high": c.warning_high}
+        for c in configs
+    ]}
+
+@app.post("/api/machine/{machine_id}/thresholds", tags=["settings"])
+def update_thresholds(machine_id: str, updates: List[ThresholdConfigUpdate]):
+    with get_db() as db:
+        for u in updates:
+            save_threshold_config(db, u.model_dump())
+    return {"status": "updated", "machine_id": machine_id}
+
+
 # ── Sensor Data ────────────────────────────────────────────────────
 @app.get("/api/machine/{machine_id}/readings", tags=["sensors"])
 def get_readings(machine_id: str, limit: int = 50):
@@ -206,7 +276,11 @@ def get_readings(machine_id: str, limit: int = 50):
                           "vibration": r.vibration, "rpm": r.rpm,
                           "motor_current": r.motor_current,
                           "health_score": r.health_score,
-                          "is_anomaly": r.is_anomaly} for r in rows]}
+                          "is_anomaly": r.is_anomaly,
+                          "power_kw": r.power_kw,
+                          "carbon_emission": r.carbon_emission,
+                          "acoustic_freq": r.acoustic_freq,
+                          "local_anomaly": r.local_anomaly} for r in rows]}
 
 
 @app.get("/api/machine/{machine_id}/trend", tags=["sensors"])
@@ -216,7 +290,7 @@ def get_trend(machine_id: str, n: int = 25):
     return {"readings": [
         {"t": r.timestamp.strftime("%H:%M:%S"), "temp": r.temperature,
          "vib": r.vibration, "health": r.health_score, "rpm": r.rpm,
-         "current": r.motor_current}
+         "current": r.motor_current, "power_kw": r.power_kw, "carbon_emission": r.carbon_emission}
         for r in rows
     ]}
 
@@ -388,6 +462,15 @@ def copilot_questions():
         "What is the current health status?",
         "Generate a quick maintenance report",
     ]}
+
+
+@app.get("/api/machine/{machine_id}/work-order", tags=["copilot"])
+def get_work_order(machine_id: str):
+    try:
+        ticket = generate_work_order(machine_id)
+        return {"machine_id": machine_id, "work_order": ticket}
+    except Exception as e:
+        raise HTTPException(500, f"Error: {e}")
 
 
 # ── PPE Violations ─────────────────────────────────────────────────

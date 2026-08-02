@@ -2,7 +2,7 @@
 EdgePilot AI — AI Maintenance Copilot
 Powered by Google Gemini (free). Grounded on real sensor data.
 
-Install: py -3.11 -m pip install google-generativeai
+Install: py -3.11 -m pip install google-genai
 """
 
 import os, json
@@ -90,9 +90,8 @@ def ask_copilot(question: str, machine_id: str) -> str:
         return "No sensor data available yet. Start the simulator first."
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        from google import genai
+        client = genai.Client(api_key=GEMINI_KEY)
 
         prompt = f"""{SYSTEM_PROMPT}
 
@@ -101,11 +100,45 @@ Machine Sensor Data (live + last 24h averages):
 
 Operator Question: {question}
 """
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
         return response.text.strip()
 
     except Exception as e:
         return f"Copilot error: {str(e)}"
+
+
+def generate_work_order(machine_id: str) -> str:
+    if not GEMINI_KEY or GEMINI_KEY == "your_gemini_key_here":
+        return "Gemini API key not configured. Cannot generate work order."
+
+    context = _get_context(machine_id)
+    if not context or "error" in context:
+        return "No sensor data available to generate work order."
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=GEMINI_KEY)
+
+        prompt = f"""You are an expert industrial maintenance planner.
+Based on the following machine sensor data and recent alerts, generate a comprehensive Jira/ServiceNow-style Work Order Ticket.
+
+Machine Sensor Data:
+{json.dumps(context, indent=2)}
+
+Include the following sections:
+- Ticket Title
+- Priority (Low, Medium, High, Critical)
+- Description of Issue
+- Suspected Root Cause
+- Required Parts/Tools
+- Step-by-Step Resolution Plan
+
+Use Markdown formatting. Be professional and detailed.
+"""
+        response = client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+        return response.text.strip()
+    except Exception as e:
+        return f"Error generating work order: {str(e)}"
 
 
 def get_allowed_questions() -> list:

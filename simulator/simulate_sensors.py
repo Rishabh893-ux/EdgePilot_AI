@@ -40,6 +40,18 @@ def get_reading(step: int) -> dict:
     curr  = round(12.2 + deg * 0.06 + n(0.2), 2)
     health= max(20.0, round(97 - deg * 3.3 + n(1.5), 1))
 
+    # Energy & Carbon Tracking (Phase 1)
+    # Assumes 480V 3-phase motor, 0.85 power factor
+    power_draw = round((curr * 480 * 1.732 * 0.85) / 1000, 2)
+    carbon_rate = round(power_draw * 0.4, 2) # ~0.4 kg CO2 per kWh
+
+    # Acoustic Anomaly Detection
+    acoustic_freq = round(1200 + deg * 45 + n(20), 1)
+
+    # True Edge ML (Local Anomaly Detection)
+    # Using lightweight threshold/z-score proxy
+    local_anomaly = bool(vib > 4.0 or temp > 75.0 or acoustic_freq > 2000)
+
     return {
         "machine_id":    MACHINE_ID,
         "timestamp":     datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", ""),
@@ -49,11 +61,30 @@ def get_reading(step: int) -> dict:
         "rpm":           rpm,
         "motor_current": curr,
         "health_score":  health,
+        "power_draw_kw": power_draw,
+        "carbon_emission": carbon_rate,
+        "acoustic_freq": acoustic_freq,
+        "local_anomaly": local_anomaly,
         "reading_id":    step,
     }
 
 
+CONTROL_TOPIC = os.getenv("MQTT_TOPIC_CONTROL", "edgepilot/control/machine_001")
+
+state = {"step": 0}
+
+def on_message(client, userdata, msg):
+    try:
+        data = json.loads(msg.payload.decode())
+        if data.get("command") == "estop":
+            print("\n[!!!] EMERGENCY STOP RECEIVED! Resetting degradation and cooling down...\n")
+            state["step"] = 0
+    except Exception as e:
+        pass
+
 client = mqtt.Client()
+client.on_message = on_message
+
 client.on_connect = lambda c, u, f, rc: print(
     f"[OK] Simulator connected to {BROKER} (rc={rc})" if rc == 0
     else f"[FAIL] Simulator connect failed rc={rc}"
@@ -61,6 +92,7 @@ client.on_connect = lambda c, u, f, rc: print(
 
 try:
     client.connect(BROKER, PORT, 60)
+    client.subscribe(CONTROL_TOPIC)
     client.loop_start()
 except Exception as e:
     print(f"[FAIL] Cannot connect to {BROKER}:{PORT} — {e}")
@@ -71,25 +103,25 @@ print("  EdgePilot AI — Sensor Simulator")
 print(f"  Machine : {MACHINE_ID}")
 print(f"  Broker  : {BROKER}:{PORT}")
 print(f"  Topic   : {TOPIC}")
+print(f"  Control : {CONTROL_TOPIC}")
 print(f"  Interval: {INTERVAL}s per reading")
 print("  Machine degrades over time — health drops slowly.")
 print("  Watch the dashboard for alerts firing in real time!")
 print("  Ctrl+C to stop")
 print("=" * 55)
 
-step = 0
 while True:
-    r = get_reading(step)
+    r = get_reading(state["step"])
     client.publish(TOPIC, json.dumps(r), qos=1)
 
     health_bar = "#" * int(r["health_score"] // 10)
     flag = "! WARN" if r["health_score"] < 70 else ("!! CRIT" if r["health_score"] < 50 else "OK    ")
     print(
-        f"[{step:04d}] {r['timestamp'][11:19]} | "
+        f"[{state['step']:04d}] {r['timestamp'][11:19]} | "
         f"Health={r['health_score']:5.1f} [{health_bar:<10}] | "
         f"Temp={r['temperature']:5.1f}C | "
         f"Vib={r['vibration']:.2f} | "
         f"RPM={r['rpm']} | {flag}"
     )
-    step += 1
+    state["step"] += 1
     time.sleep(INTERVAL)

@@ -20,8 +20,28 @@ SKIP     = 5       # run inference every N frames
 CONF     = 0.45    # detection confidence
 COOLDOWN = 10      # seconds between same violation logs
 
-# Danger zone — right 40% of frame
-DANGER_ZONE = (0.6, 0.0, 1.0, 1.0)
+# Danger zone — right 40% of frame (default)
+DANGER_ZONE = [0.6, 0.0, 1.0, 1.0]
+drawing = False
+ix, iy = -1, -1
+
+def draw_rectangle(event, x, y, flags, param):
+    global drawing, ix, iy, DANGER_ZONE
+    w = param['w']
+    h = param['h']
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        drawing = True
+        ix, iy = x, y
+    elif event == cv2.EVENT_LBUTTONUP:
+        drawing = False
+        x_min = min(ix, x) / w
+        y_min = min(iy, y) / h
+        x_max = max(ix, x) / w
+        y_max = max(iy, y) / h
+        
+        if x_max > x_min and y_max > y_min:
+            DANGER_ZONE = [x_min, y_min, x_max, y_max]
 
 PPE_LABELS = {"helmet","hard hat","safety helmet","hardhat",
               "vest","safety vest","high visibility","hi-vis"}
@@ -44,10 +64,11 @@ def log_violation(msg: str):
 
 
 def in_zone(box, w, h):
-    x1,y1,x2,y2 = box
-    zx = DANGER_ZONE[0] * w
+    x1, y1, x2, y2 = box
+    zx1, zy1, zx2, zy2 = DANGER_ZONE
     cx = (x1 + x2) / 2
-    return cx > zx
+    cy = (y1 + y2) / 2
+    return (cx >= zx1 * w and cx <= zx2 * w and cy >= zy1 * h and cy <= zy2 * h)
 
 
 def run():
@@ -62,7 +83,10 @@ def run():
         print("  Phone:  install 'IP Webcam' app → set CAMERA_SOURCE=http://phone-ip:8080/video")
         return
 
-    print(f"[PPE] Camera open: {CAMERA} | Q to quit")
+    cv2.namedWindow("EdgePilot AI — Safety Monitor")
+    cv2.setMouseCallback("EdgePilot AI — Safety Monitor", draw_rectangle, param={'w': int(cap.get(3)), 'h': int(cap.get(4))})
+
+    print(f"[PPE] Camera open: {CAMERA} | Q to quit | Click & Drag to draw Danger Zone")
     frame_n = 0
     last_viol = 0
 
@@ -73,8 +97,9 @@ def run():
         h, w = frame.shape[:2]
 
         # Danger zone overlay
-        cv2.rectangle(frame, (int(DANGER_ZONE[0]*w), 0), (w, h), (0,0,255), 2)
-        cv2.putText(frame, "DANGER ZONE", (int(DANGER_ZONE[0]*w)+5, 25),
+        zx1, zy1, zx2, zy2 = DANGER_ZONE
+        cv2.rectangle(frame, (int(zx1*w), int(zy1*h)), (int(zx2*w), int(zy2*h)), (0,0,255), 2)
+        cv2.putText(frame, "DANGER ZONE", (int(zx1*w)+5, int(zy1*h)+25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255), 2)
 
         if frame_n % SKIP == 0:

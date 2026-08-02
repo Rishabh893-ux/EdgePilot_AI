@@ -1,0 +1,8 @@
+- `[x]` Develop `Sidebar` component in `src/components/Sidebar.tsx`
+- `[x]` Update `layout.tsx` to include `Sidebar` wrapping all routes
+- `[x]` Develop `Analytics` page (`src/app/analytics/page.tsx`)
+- `[x]` Develop `Alerts` page (`src/app/alerts/page.tsx`)
+- `[x]` Develop `Fleet` page (`src/app/fleet/page.tsx`)
+- `[x]` Develop `Copilot` page (`src/app/copilot/page.tsx`)
+- `[x]` Develop `Reports` page (`src/app/reports/page.tsx`)
+- `[x]` Re-skin existing pages (`/`, `/violations`, `/maintenance`, `/settings`) with the new visual aesthetic

@@ -39,9 +39,9 @@ class AnomalyDetector:
         shift = SHIFT_ENC.get(r.get("shift", "morning"), 0)
         temp  = r["temperature"]; vib = r["vibration"]
         rpm   = r["rpm"];         curr = r["motor_current"]
-        health= r["health_score"]
+        health= r["health_score"]; acoustic = r.get("acoustic_freq", 1200.0)
         return np.array([[temp, vib, rpm, curr, health, shift, dt.hour,
-                          temp / max(vib, 0.1), (rpm * curr) / 1000.0]], dtype=np.float32)
+                          temp / max(vib, 0.1), (rpm * curr) / 1000.0, acoustic]], dtype=np.float32)
 
     def train(self, readings: List[dict]) -> dict:
         if len(readings) < 50:
@@ -69,6 +69,7 @@ class AnomalyDetector:
     def _rule_based(self, r: dict) -> dict:
         anomaly = (r.get("temperature", 0) > 78 or
                    r.get("vibration",   0) > 4.0 or
+                   r.get("acoustic_freq", 0) > 2000 or
                    r.get("health_score", 100) < 55)
         return {"is_anomaly": anomaly, "anomaly_score": -0.5 if anomaly else 0.1}
 
@@ -79,8 +80,10 @@ class AnomalyDetector:
         slope, intercept = np.polyfit(x, scores, 1)
         if slope >= 0: return 999
         steps_to_fail = -intercept / slope
-        rul = max(0, int((steps_to_fail - len(scores)) / (86400 / 3)))
-        return rul
+        remaining_steps = max(0, steps_to_fail - len(scores))
+        # Simulation is fast (fails in ~1600 steps). Scale this to a realistic 45-day RUL for the demo.
+        rul = int(remaining_steps * (45.0 / 1600.0))
+        return max(0, rul)
 
     def _save(self):
         joblib.dump(self.model, MODEL_PATH)
@@ -88,7 +91,7 @@ class AnomalyDetector:
         json.dump({"training_samples": self.training_samples,
                    "trained_at": datetime.now(timezone.utc).isoformat()},
                   open(METADATA_PATH, "w"), indent=2)
-        print(f"[INFO] Model saved → {MODEL_DIR}")
+        print(f"[INFO] Model saved -> {MODEL_DIR}")
 
     def _load(self):
         try:

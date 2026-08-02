@@ -13,10 +13,12 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from backend.database import (
     get_db, save_reading, update_anomaly_flags, save_alert,
     get_recent_readings, get_readings_for_trend, update_shift_baseline,
-    update_copilot_context, get_recent_alerts, save_failure_story
+    update_copilot_context, get_recent_alerts, save_failure_story,
+    save_maintenance_log, get_maintenance_history
 )
-from backend.anomaly import detect_anomaly
+from backend.anomaly import detect_anomaly, get_detector
 from backend.alerts  import generate_trend_alerts, generate_failure_story
+from backend.notifier import send_critical_alert
 
 MQTT_BROKER    = os.getenv("MQTT_BROKER",       "test.mosquitto.org")
 MQTT_PORT      = int(os.getenv("MQTT_PORT",      "1883"))
@@ -35,7 +37,7 @@ CONTEXT_EVERY = 10
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         client.subscribe(MQTT_TOPIC, qos=1)
-        print(f"[OK] Backend connected to MQTT → {MQTT_BROKER} | Topic: {MQTT_TOPIC}")
+        print(f"[OK] Backend connected to MQTT -> {MQTT_BROKER} | Topic: {MQTT_TOPIC}")
     else:
         print(f"[FAIL] MQTT connect failed rc={rc}")
 
@@ -70,7 +72,7 @@ def on_message(client, userdata, msg):
         if _alert_tick >= ALERT_EVERY:
             _alert_tick = 0
             threading.Thread(target=_check_alerts, args=(data["machine_id"],), daemon=True).start()
-        flag = "🔴 ANOMALY" if result["is_anomaly"] else "🟢"
+        flag = "[ANOMALY]" if result["is_anomaly"] else "[OK]"
         print(f"[{_count:04d}] Health={data['health_score']:.0f} Temp={data['temperature']:.1f}C Vib={data['vibration']:.2f} {flag}")
     except Exception as e:
         print(f"[FAIL] MQTT message error: {e}")
@@ -86,10 +88,12 @@ def _check_alerts(machine_id: str):
                        "health_score": r.health_score} for r in rows]
             existing = [{"parameter": a.parameter, "alert_type": a.alert_type}
                         for a in get_recent_alerts(db, machine_id, limit=20)]
-            new_alerts = generate_trend_alerts(machine_id, rdicts, existing)
+            new_alerts = generate_trend_alerts(machine_id, rdicts, existing, db)
             for a in new_alerts:
                 save_alert(db, a)
                 print(f"[ALERT] {a['message'][:80]}")
+                if a["severity"] == "critical":
+                    send_critical_alert(a["message"])
             critical = [a for a in new_alerts if a["severity"] == "critical"]
             if critical:
                 all_rows = get_recent_readings(db, machine_id, limit=100)
@@ -104,6 +108,23 @@ def _check_alerts(machine_id: str):
                 story["timestamp"]  = datetime.now(timezone.utc).isoformat()
                 save_failure_story(db, story)
                 print(f"[STORY] Failure story saved: {story['root_cause']}")
+
+            # --- Feature 2: Automated Maintenance ---
+            det = get_detector()
+            rul = det.get_rul_days(rdicts)
+            if rul != -1 and rul < 7:
+                # Check if we already logged auto-maintenance recently
+                recent_logs = get_maintenance_history(db, machine_id, limit=5)
+                already_logged = any(l.maintenance_type == "auto_scheduled" for l in recent_logs)
+                if not already_logged:
+                    auto_log = {
+                        "machine_id": machine_id,
+                        "maintenance_type": "auto_scheduled",
+                        "description": f"Auto-scheduled maintenance due to low RUL ({rul} days). Please inspect immediately.",
+                    }
+                    save_maintenance_log(db, auto_log)
+                    print(f"[MAINTENANCE] Auto-scheduled task created (RUL={rul}d)")
+                    send_critical_alert(f"Automated Maintenance Task created: RUL dropped to {rul} days.")
     except Exception as e:
         print(f"[FAIL] Alert check error: {e}")
 

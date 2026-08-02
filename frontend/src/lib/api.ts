@@ -1,18 +1,58 @@
 /**
- * EdgePilot AI — API Helper
+ * EdgePilot AI — API Helper with In-Memory Cache
  *
- * The backend URL is loaded from frontend/.env
- * Change NEXT_PUBLIC_API_URL in that file if your backend
- * runs on a different port or machine.
+ * GET requests are cached client-side for `DEFAULT_TTL` ms.
+ * This means switching tabs shows data immediately from cache
+ * while a background refresh happens silently.
  *
- * Default: http://localhost:8000
+ * POST/mutation requests are never cached.
  */
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
+// ── Cache ──────────────────────────────────────────────────────────
+const DEFAULT_TTL = 5_000   // 5s for fast-changing sensor data
+const SLOW_TTL    = 30_000  // 30s for rarely-changing data
+
+interface CacheEntry { data: any; ts: number; ttl: number }
+const _cache = new Map<string, CacheEntry>()
+
+function getCached(key: string): any | null {
+  const e = _cache.get(key)
+  if (!e) return null
+  if (Date.now() - e.ts > e.ttl) { _cache.delete(key); return null }
+  return e.data
+}
+
+function setCached(key: string, data: any, ttl = DEFAULT_TTL) {
+  _cache.set(key, { data, ts: Date.now(), ttl })
+}
+
+async function cachedFetch(key: string, url: string, ttl = DEFAULT_TTL): Promise<any> {
+  const hit = getCached(key)
+  if (hit !== null) return hit          // instant return from cache
+  const data = await fetch(url, { cache: "no-store" }).then(r => r.json())
+  setCached(key, data, ttl)
+  return data
+}
+
+// ── Public cache utils ─────────────────────────────────────────────
+export const apiCache = {
+  /** Invalidate a specific key or all keys matching a prefix */
+  invalidate: (prefix?: string) => {
+    if (!prefix) { _cache.clear(); return }
+    for (const k of Array.from(_cache.keys())) { if (k.startsWith(prefix)) _cache.delete(k) }
+  },
+  /** Force-refresh a key next time it's requested */
+  bust: (key: string) => _cache.delete(key),
+  /** How many entries are currently cached */
+  size: () => _cache.size,
+}
+
+// ── API ────────────────────────────────────────────────────────────
 export const api = {
 
-  // ── Auth ─────────────────────────────────────────────────────
+  // ── Auth (never cached — mutations) ──────────────────────────────
   login: (username: string, password: string) =>
     fetch(`${BASE}/api/auth/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`, {
       method: "POST",
@@ -29,47 +69,69 @@ export const api = {
       method: "POST",
     }).then(r => r.json()),
 
-  // ── Dashboard (single call — all data) ────────────────────────
+  // ── Dashboard — cached 5s (real-time sensor data) ─────────────────
   dashboard: () =>
-    fetch(`${BASE}/api/dashboard`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("dashboard", `${BASE}/api/dashboard`, DEFAULT_TTL),
 
+  // ── Fleet — cached 15s (changes rarely mid-session) ───────────────
   fleet: () =>
-    fetch(`${BASE}/api/fleet`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("fleet", `${BASE}/api/fleet`, 15_000),
 
-  // ── Sensor trend (for charts) ──────────────────────────────────
+  export: (machineId = "machine_001", days = 30) => {
+    window.open(`${BASE}/api/machine/${machineId}/export?days=${days}`, "_blank")
+  },
+
+  // ── Settings ─────────────────────────────────────────────────────
+  getThresholds: (machineId = "machine_001") =>
+    cachedFetch(`thresholds:${machineId}`, `${BASE}/api/machine/${machineId}/thresholds`, SLOW_TTL),
+
+  updateThresholds: (machineId: string, updates: any[]) => {
+    apiCache.invalidate(`thresholds:${machineId}`)
+    return fetch(`${BASE}/api/machine/${machineId}/thresholds`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    }).then(r => r.json())
+  },
+
+  // ── Sensor trend — cached 5s ──────────────────────────────────────
   trend: (n = 25) =>
-    fetch(`${BASE}/api/machine/machine_001/trend?n=${n}`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch(`trend:${n}`, `${BASE}/api/machine/machine_001/trend?n=${n}`, DEFAULT_TTL),
 
-  // ── Alerts ────────────────────────────────────────────────────
+  // ── Alerts — cached 4s ────────────────────────────────────────────
   alerts: (limit = 15) =>
-    fetch(`${BASE}/api/machine/machine_001/alerts?limit=${limit}`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch(`alerts:${limit}`, `${BASE}/api/machine/machine_001/alerts?limit=${limit}`, 4_000),
 
-  acknowledgeAlert: (id: number) =>
-    fetch(`${BASE}/api/alerts/${id}/acknowledge`, { method: "POST" }),
+  acknowledgeAlert: (id: number) => {
+    apiCache.invalidate("alerts")
+    return fetch(`${BASE}/api/alerts/${id}/acknowledge`, { method: "POST" })
+  },
 
-  // ── Failure Story ─────────────────────────────────────────────
+  // ── Failure story — cached 60s (expensive AI call) ────────────────
   story: () =>
-    fetch(`${BASE}/api/machine/machine_001/failure-story`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("story", `${BASE}/api/machine/machine_001/failure-story`, 60_000),
 
-  // ── Maintenance log ───────────────────────────────────────────
+  // ── Maintenance — cached 15s ──────────────────────────────────────
   maintenance: () =>
-    fetch(`${BASE}/api/machine/machine_001/maintenance`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("maintenance", `${BASE}/api/machine/machine_001/maintenance`, 15_000),
 
-  // ── Recommendations ───────────────────────────────────────────
+  // ── Recommendations — cached 10s ─────────────────────────────────
   recommendations: () =>
-    fetch(`${BASE}/api/machine/machine_001/recommendations`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("recommendations", `${BASE}/api/machine/machine_001/recommendations`, 10_000),
 
+  // ── Notifications — cached 8s ─────────────────────────────────────
   notifications: () =>
-    fetch(`${BASE}/api/machine/machine_001/notifications`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("notifications", `${BASE}/api/machine/machine_001/notifications`, 8_000),
 
+  // ── Safety — cached 10s ──────────────────────────────────────────
   safety: () =>
-    fetch(`${BASE}/api/machine/machine_001/safety`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("safety", `${BASE}/api/machine/machine_001/safety`, 10_000),
 
-  // ── PPE Violations ────────────────────────────────────────────
+  // ── PPE Violations — cached 10s ──────────────────────────────────
   violations: () =>
-    fetch(`${BASE}/api/violations`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("violations", `${BASE}/api/violations`, 10_000),
 
-  // ── AI Copilot ────────────────────────────────────────────────
+  // ── AI Copilot (POST — never cached) ─────────────────────────────
   copilot: (question: string, machineId = "machine_001") =>
     fetch(`${BASE}/api/copilot`, {
       method: "POST",
@@ -77,15 +139,28 @@ export const api = {
       body: JSON.stringify({ machine_id: machineId, question }),
     }).then(r => r.json()),
 
-  // ── ML Model ─────────────────────────────────────────────────
+  generateWorkOrder: (machineId = "machine_001") =>
+    fetch(`${BASE}/api/machine/${machineId}/work-order`, { cache: "no-store" }).then(r => r.json()),
+
+  // ── ML Model — cached 20s ────────────────────────────────────────
   mlStatus: () =>
-    fetch(`${BASE}/api/ml/status`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("ml_status", `${BASE}/api/ml/status`, 20_000),
 
-  trainModel: () =>
-    fetch(`${BASE}/api/machine/machine_001/train`, { method: "POST" }).then(r => r.json()),
+  trainModel: () => {
+    apiCache.invalidate("ml_status")
+    return fetch(`${BASE}/api/machine/machine_001/train`, { method: "POST" }).then(r => r.json())
+  },
 
-  // ── System Status ─────────────────────────────────────────────
+  // ── System Status — cached 5s ────────────────────────────────────
   systemStatus: () =>
-    fetch(`${BASE}/api/status`, { cache: "no-store" }).then(r => r.json()),
+    cachedFetch("system_status", `${BASE}/api/status`, DEFAULT_TTL),
+
+  // ── Control (POST — never cached) ────────────────────────────────
+  sendControlCommand: (machineId: string, command: any) =>
+    fetch(`${BASE}/api/machine/${machineId}/control`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(command),
+    }).then(r => r.json()),
 
 }

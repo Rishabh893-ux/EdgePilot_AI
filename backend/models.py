@@ -15,7 +15,11 @@ class SensorReadingOut(BaseModel):
     motor_current: float
     health_score: float
     is_anomaly: bool
+    local_anomaly: Optional[bool] = False
     anomaly_score: Optional[float]
+    power_kw: Optional[float] = None
+    carbon_emission: Optional[float] = None
+    acoustic_freq: Optional[float] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -88,6 +92,8 @@ class DashboardResponse(BaseModel):
     active_alerts: int
     total_readings: int
     last_updated: datetime
+    power_kw: Optional[float] = None
+    carbon_emission: Optional[float] = None
     recent_readings: List[Dict[str, Any]] = []
     recent_alerts: List[Dict[str, Any]] = []
 
@@ -99,3 +105,12 @@ class SystemStatus(BaseModel):
     model_trained: bool
     active_alerts: int
     db_path: str
+
+
+class ThresholdConfigUpdate(BaseModel):
+    machine_id: str
+    parameter: str
+    warning: Optional[float] = None
+    critical: Optional[float] = None
+    warning_low: Optional[float] = None
+    warning_high: Optional[float] = None
