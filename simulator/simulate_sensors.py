@@ -54,7 +54,7 @@ def get_reading(step: int) -> dict:
 
     return {
         "machine_id":    MACHINE_ID,
-        "timestamp":     datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", ""),
+        "timestamp":     datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", ""),
         "shift":         get_shift(),
         "temperature":   temp,
         "vibration":     vib,
@@ -134,6 +134,3 @@ def run_simulator(client):
         )
         state["step"] += 1
         time.sleep(INTERVAL)
-
-if __name__ == "__main__":
-    run_simulator()
