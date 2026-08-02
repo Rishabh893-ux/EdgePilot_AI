@@ -20,7 +20,7 @@
 
 </div>
 
-|---|---|
+------
 
 ## 📸 Screenshots
 
@@ -52,7 +52,7 @@
   <img src="https://github.com/user-attachments/assets/68841877-ea69-4827-af01-3cd749fb67af" width="32%">
 </p>
 
-|---|---|
+------
 
 ## 🌟 Key Features
 
