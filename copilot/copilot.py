@@ -100,7 +100,7 @@ Machine Sensor Data (live + last 24h averages):
 
 Operator Question: {question}
 """
-        response = client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
         return response.text.strip()
 
     except Exception as e:
@@ -135,7 +135,7 @@ Include the following sections:
 
 Use Markdown formatting. Be professional and detailed.
 """
-        response = client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
         return response.text.strip()
     except Exception as e:
         return f"Error generating work order: {str(e)}"
