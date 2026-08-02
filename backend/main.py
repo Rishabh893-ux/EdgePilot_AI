@@ -296,7 +296,8 @@ def get_trend(machine_id: str, n: int = 25):
     return {"readings": [
         {"t": r.timestamp.strftime("%H:%M:%S"), "temp": r.temperature,
          "vib": r.vibration, "health": r.health_score, "rpm": r.rpm,
-         "current": r.motor_current, "power_kw": r.power_kw, "carbon_emission": r.carbon_emission}
+         "current": r.motor_current, "power_kw": r.power_kw, "carbon_emission": r.carbon_emission,
+         "acoustic": r.acoustic_freq}
         for r in rows
     ]}
 

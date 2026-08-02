@@ -335,3 +335,15 @@ body {
 .skeleton-line.w-100 { width: 100%; }
 .skeleton-line.h-24 { height: 24px; }
 
+/* ── Light Theme ────────────────────────────────────────────────────── */
+html.light {
+  filter: invert(1) hue-rotate(180deg);
+  background: white;
+}
+
+html.light img, 
+html.light video, 
+html.light svg {
+  filter: invert(1) hue-rotate(180deg);
+}
+

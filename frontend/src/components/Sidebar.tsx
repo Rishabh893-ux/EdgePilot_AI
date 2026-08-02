@@ -110,9 +110,29 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* User Footer */}
-      {user && (
-        <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(0,212,255,0.06)" }}>
+    {/* User Footer */}
+      <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(0,212,255,0.06)", display: "flex", flexDirection: "column", gap: 12 }}>
+        
+        {/* Theme Toggle */}
+        <button onClick={() => {
+          const isLight = document.documentElement.classList.contains("light")
+          if (isLight) {
+            document.documentElement.classList.remove("light")
+            localStorage.setItem("theme", "dark")
+          } else {
+            document.documentElement.classList.add("light")
+            localStorage.setItem("theme", "light")
+          }
+        }} style={{
+          background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.2)",
+          color: "#00d4ff", padding: "6px 12px", borderRadius: "6px",
+          fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", justifyContent: "center", gap: 6,
+          transition: "all 0.2s"
+        }}>
+          🌓 Toggle Theme
+        </button>
+
+        {user && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div style={{
               width: 32, height: 32, borderRadius: "50%",
@@ -133,8 +153,9 @@ export default function Sidebar() {
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#4a5a7a"}
             >⏻</button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   )
 }
+
