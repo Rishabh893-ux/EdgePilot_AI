@@ -124,6 +124,27 @@ class ThresholdConfig(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    # Seed mock safety data if empty
+    db = SessionLocal()
+    try:
+        if db.query(PPEViolation).count() == 0:
+            ts = datetime.now(timezone.utc).isoformat()
+            db.add(PPEViolation(machine_id="machine_001", violation="Worker spotted without helmet near Conveyor Belt", shift="morning", created_at=ts))
+            db.add(PPEViolation(machine_id="machine_001", violation="No Hi-Vis vest detected in Zone B", shift="afternoon", created_at=ts))
+            db.add(PPEViolation(machine_id="machine_001", violation="Technician not wearing safety goggles", shift="night", created_at=ts))
+            
+        if db.query(MaintenanceLog).count() == 0:
+            ts = datetime.now(timezone.utc)
+            db.add(MaintenanceLog(machine_id="machine_001", timestamp=ts, maintenance_type="inspection", description="Weekly routine inspection", performed_by="operator", health_before=95, health_after=97, duration_hours=1))
+            db.add(MaintenanceLog(machine_id="machine_001", timestamp=ts, maintenance_type="preventive", description="Replaced primary filter and lubricated joints", performed_by="admin", health_before=82, health_after=95, duration_hours=2))
+        
+        db.commit()
+    except Exception as e:
+        db.rollback()
+    finally:
+        db.close()
+        
     print("[OK] Database initialised -> edgepilot.db")
 
 @contextmanager
