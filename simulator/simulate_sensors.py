@@ -82,46 +82,58 @@ def on_message(client, userdata, msg):
     except Exception as e:
         pass
 
-client = mqtt.Client()
-client.on_message = on_message
+def start_simulator_loop():
+    client = mqtt.Client()
+    client.on_message = on_message
 
-client.on_connect = lambda c, u, f, rc: print(
-    f"[OK] Simulator connected to {BROKER} (rc={rc})" if rc == 0
-    else f"[FAIL] Simulator connect failed rc={rc}"
-)
-
-try:
-    client.connect(BROKER, PORT, 60)
-    client.subscribe(CONTROL_TOPIC)
-    client.loop_start()
-except Exception as e:
-    print(f"[FAIL] Cannot connect to {BROKER}:{PORT} — {e}")
-    exit(1)
-
-print("=" * 55)
-print("  EdgePilot AI — Sensor Simulator")
-print(f"  Machine : {MACHINE_ID}")
-print(f"  Broker  : {BROKER}:{PORT}")
-print(f"  Topic   : {TOPIC}")
-print(f"  Control : {CONTROL_TOPIC}")
-print(f"  Interval: {INTERVAL}s per reading")
-print("  Machine degrades over time — health drops slowly.")
-print("  Watch the dashboard for alerts firing in real time!")
-print("  Ctrl+C to stop")
-print("=" * 55)
-
-while True:
-    r = get_reading(state["step"])
-    client.publish(TOPIC, json.dumps(r), qos=1)
-
-    health_bar = "#" * int(r["health_score"] // 10)
-    flag = "! WARN" if r["health_score"] < 70 else ("!! CRIT" if r["health_score"] < 50 else "OK    ")
-    print(
-        f"[{state['step']:04d}] {r['timestamp'][11:19]} | "
-        f"Health={r['health_score']:5.1f} [{health_bar:<10}] | "
-        f"Temp={r['temperature']:5.1f}C | "
-        f"Vib={r['vibration']:.2f} | "
-        f"RPM={r['rpm']} | {flag}"
+    client.on_connect = lambda c, u, f, rc: print(
+        f"[OK] Simulator connected to {BROKER} (rc={rc})" if rc == 0
+        else f"[FAIL] Simulator connect failed rc={rc}",
+        flush=True
     )
-    state["step"] += 1
-    time.sleep(INTERVAL)
+
+    try:
+        client.connect(BROKER, PORT, 60)
+        client.subscribe(CONTROL_TOPIC)
+        client.loop_start()
+    except Exception as e:
+        print(f"[FAIL] Cannot connect to {BROKER}:{PORT} — {e}")
+        return
+
+    run_simulator(client)
+
+if __name__ == "__main__":
+    start_simulator_loop()
+
+def run_simulator(client):
+    print("=" * 55)
+    print("  EdgePilot AI — Sensor Simulator")
+    print(f"  Machine : {MACHINE_ID}")
+    print(f"  Broker  : {BROKER}:{PORT}")
+    print(f"  Topic   : {TOPIC}")
+    print(f"  Control : {CONTROL_TOPIC}")
+    print(f"  Interval: {INTERVAL}s per reading")
+    print("  Machine degrades over time — health drops slowly.")
+    print("  Watch the dashboard for alerts firing in real time!")
+    print("  Ctrl+C to stop")
+    print("=" * 55)
+
+    while True:
+        r = get_reading(state["step"])
+        client.publish(TOPIC, json.dumps(r), qos=1)
+
+        health_bar = "#" * int(r["health_score"] // 10)
+        flag = "! WARN" if r["health_score"] < 70 else ("!! CRIT" if r["health_score"] < 50 else "OK    ")
+        print(
+            f"[{state['step']:04d}] {r['timestamp'][11:19]} | "
+            f"Health={r['health_score']:5.1f} [{health_bar:<10}] | "
+            f"Temp={r['temperature']:5.1f}C | "
+            f"Vib={r['vibration']:.2f} | "
+            f"RPM={r['rpm']} | {flag}",
+            flush=True
+        )
+        state["step"] += 1
+        time.sleep(INTERVAL)
+
+if __name__ == "__main__":
+    run_simulator()

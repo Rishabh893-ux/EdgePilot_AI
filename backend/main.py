@@ -58,6 +58,12 @@ def startup():
     init_db()
     ensure_default_users()
     start_subscriber()
+    
+    import threading
+    from simulator.simulate_sensors import start_simulator_loop
+    print("Starting built-in simulator thread...")
+    threading.Thread(target=start_simulator_loop, daemon=True).start()
+    
     print("=" * 50)
     print("  [OK] EdgePilot AI Backend ready")
     print("  API  -> http://localhost:8000")
