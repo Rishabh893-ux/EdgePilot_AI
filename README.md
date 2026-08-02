@@ -20,19 +20,39 @@
 
 </div>
 
----
+|---|---|
 
 ## 📸 Screenshots
 
-| Dashboard | Fleet Command Center |
-|---|---|
-| Real-time sensor metrics, health scores, and AI alerts | Multi-machine fleet management with MQTT live feeds |
+### 🎛️ Dashboard | Fleet Command Center
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/a7f185e9-eee6-46bd-b9fb-e70d3b262397" width="48%">
+  <img src="https://github.com/user-attachments/assets/9cd2b257-ef1b-4d61-b29c-c94ff4bf5836" width="48%">
+</p>
 
-| Safety Intelligence Hub | Reports & Exports |
-|---|---|
-| PPE violation detection, risk scoring, trend analysis | CSV exports, AI failure stories, maintenance logs |
+### 📊 Real-time sensor metrics, health scores, and AI alerts | Multi-machine fleet management with MQTT live feeds
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fb60556e-a8ce-43f0-9a96-f7e1081ae169" width="48%">
+  <img src="https://github.com/user-attachments/assets/0b2a0aac-ea25-4a51-a1e6-289e2c1f3e61" width="48%">
+</p>
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/9df72f5b-3bc5-4cff-bfd9-5305222d1649" width="98%">
+</p>
 
----
+### 🛡️ Safety Intelligence Hub | Reports & Exports
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/7b8dfbe2-59f5-4597-bd0e-a205010cc103" width="48%">
+  <img src="https://github.com/user-attachments/assets/96db057a-74de-4e45-b72d-669359cccd0b" width="48%">
+</p>
+
+### ⚠️ PPE violation detection, risk scoring, trend analysis | CSV exports, AI failure stories, maintenance logs
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/564186dc-fca1-4bbe-92cf-9b7d5ad35d09" width="32%">
+  <img src="https://github.com/user-attachments/assets/aa7e8a32-4230-47dc-92c2-bb02be54520b" width="32%">
+  <img src="https://github.com/user-attachments/assets/68841877-ea69-4827-af01-3cd749fb67af" width="32%">
+</p>
+
+|---|---|
 
 ## 🌟 Key Features
 
