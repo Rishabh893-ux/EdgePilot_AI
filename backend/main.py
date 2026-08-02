@@ -55,9 +55,14 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
+    import subprocess
     init_db()
     ensure_default_users()
     start_subscriber()
+    
+    print("Starting built-in simulator...")
+    subprocess.Popen(["python", "simulator/simulate_sensors.py"])
+    
     print("=" * 50)
     print("  [OK] EdgePilot AI Backend ready")
     print("  API  -> http://localhost:8000")
