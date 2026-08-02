@@ -66,6 +66,10 @@ export default function AnalyticsPage() {
   const anomalies = readings.filter((r: any) => r.is_anomaly)
   const normal    = readings.filter((r: any) => !r.is_anomaly)
 
+  const avg_health = readings.length ? readings.reduce((a, r) => a + r.health_score, 0) / readings.length : 0
+  const avg_temp = readings.length ? readings.reduce((a, r) => a + r.temperature, 0) / readings.length : 0
+  const max_vib = readings.length ? Math.max(...readings.map(r => r.vibration)) : 0
+
   const shiftStats = ["morning", "afternoon", "night"].map(s => {
     const rows = readings.filter((r: any) => r.shift === s)
     return {
@@ -91,9 +95,9 @@ export default function AnalyticsPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 16, marginBottom: 28 }}>
         <MetricCard label="Total Readings"   value={readings.length}                               icon="📡" color="#00d4ff" />
         <MetricCard label="Anomalies"        value={anomalies.length}                              icon="⚠️" crit={anomalies.length > 5} warn={anomalies.length > 0} />
-        <MetricCard label="Avg Health"       value={stats?.health_stats?.avg_health?.toFixed(1)}  icon="💚" unit="/100" color="#00ff88" />
-        <MetricCard label="Avg Temperature"  value={stats?.health_stats?.avg_temp?.toFixed(1)}    icon="🌡" unit="°C"  warn={stats?.health_stats?.avg_temp > 70} crit={stats?.health_stats?.avg_temp > 80} />
-        <MetricCard label="Peak Vibration"   value={stats?.health_stats?.max_vib?.toFixed(2)}     icon="📳" unit="mm/s" warn={stats?.health_stats?.max_vib > 4} crit={stats?.health_stats?.max_vib > 6} />
+        <MetricCard label="Avg Health"       value={avg_health > 0 ? avg_health.toFixed(1) : "—"}  icon="💚" unit="/100" color="#00ff88" />
+        <MetricCard label="Avg Temperature"  value={avg_temp > 0 ? avg_temp.toFixed(1) : "—"}      icon="🌡" unit="°C"  warn={avg_temp > 70} crit={avg_temp > 80} />
+        <MetricCard label="Peak Vibration"   value={max_vib > 0 ? max_vib.toFixed(2) : "—"}        icon="📳" unit="mm/s" warn={max_vib > 4} crit={max_vib > 6} />
         <MetricCard label="ML Model"         value={stats ? (stats.is_anomaly !== undefined ? "Active" : "Off") : "—"} icon="🧠" color="#a855f7" />
       </div>
 
