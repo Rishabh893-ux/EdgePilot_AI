@@ -19,10 +19,9 @@ MACHINE_ID = "machine_001"
 
 
 def get_shift():
-    h = datetime.datetime.now().hour
-    if 6 <= h < 14:    return "morning"
-    elif 14 <= h < 22: return "afternoon"
-    else:              return "night"
+    # Return a random shift so the dashboard's Shift Comparison chart
+    # populates with data across all shifts during a short demo session.
+    return random.choice(["morning", "afternoon", "night"])
 
 
 def get_reading(step: int) -> dict:
