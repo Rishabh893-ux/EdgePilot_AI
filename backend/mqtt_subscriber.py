@@ -23,7 +23,8 @@ from backend.notifier import send_critical_alert
 MQTT_BROKER    = os.getenv("MQTT_BROKER",       "test.mosquitto.org")
 MQTT_PORT      = int(os.getenv("MQTT_PORT",      "1883"))
 MQTT_TOPIC     = os.getenv("MQTT_TOPIC_SENSORS", "edgepilot/sensors/machine_001")
-MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID",     "edgepilot_backend")
+import random, string
+MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID",     "edgepilot_backend") + "_" + "".join(random.choices(string.ascii_letters + string.digits, k=6))
 
 _thread: Optional[threading.Thread] = None
 _stop   = threading.Event()
