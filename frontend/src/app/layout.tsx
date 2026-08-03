@@ -41,8 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#00d4ff" />
         <link rel="apple-touch-icon" href="/icon-512.png" />
         {/* Performance: preconnect to backend API */}
-        <link rel="preconnect" href="http://localhost:8000" />
-        <link rel="dns-prefetch" href="http://localhost:8000" />
+
       </head>
       <body>
         <div className="ep-layout">
